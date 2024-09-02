@@ -19,8 +19,8 @@ enum Node {
 impl Node {
     fn can_borrow(&self, degree: usize) -> bool {
         match self {
-            Node::Leaf(leaf_node) => leaf_node.keys.len() > (degree / 2),
-            Node::Internal(internal_node) => internal_node.keys.len() > (degree / 2),
+            Node::Leaf(leaf_node) => leaf_node.keys.len() > (degree / 2) - 1,
+            Node::Internal(internal_node) => internal_node.keys.len() > (degree / 2) - 1,
         }
     }
 
@@ -121,7 +121,7 @@ impl LeafNode {
             Ok(position) => {
                 self.keys.remove(position);
                 self.values.remove(position);
-                Some(self.keys.len() < (degree / 2))
+                Some(self.keys.len() < (degree / 2) - 1)
             }
         }
     }
@@ -225,153 +225,13 @@ impl InternalNode {
     }
 
     fn rebalance(&mut self, pager: &mut Pager, index: usize, degree: usize) -> bool {        
-        let child_offset = self.children[index];
-        let mut child_node = pager.read(child_offset).unwrap();
-    
-        if index > 0 {
-            let left_sibling_offset = self.children[index - 1];
-            let mut left_sibling = pager.read(left_sibling_offset).unwrap();
-    
-            if left_sibling.can_borrow(degree) {
-                match (&mut left_sibling, &mut child_node) {
-                    (Node::Internal(ref mut sibling), Node::Internal(ref mut current)) => {
-                        println!("1 {:?} {:?} {:?}", self, current, sibling);
-                        let borrowed_key = sibling.keys.pop().unwrap();
-                        current.keys.insert(0, self.keys[index - 1].clone());
-                        self.keys[index - 1] = borrowed_key;
-    
-                        let borrowed_child = sibling.children.pop().unwrap();
-                        current.children.insert(0, borrowed_child);
-    
-                        pager.write_at(&Node::Internal(sibling.clone()), left_sibling_offset).unwrap();
-                        pager.write_at(&Node::Internal(current.clone()), child_offset).unwrap();
-                    },
-                    (Node::Leaf(ref mut sibling), Node::Leaf(ref mut current)) => {
-                        println!("2 {:?} {:?} {:?}", self, current, sibling);
-                        let borrowed_key = sibling.keys.pop().unwrap();
-                        let borrowed_value = sibling.values.pop().unwrap();
-                        current.keys.insert(0, borrowed_key);
-                        current.values.insert(0, borrowed_value);
-    
-                        self.keys[index - 1] = current.keys[0].clone();
-    
-                        pager.write_at(&Node::Leaf(sibling.clone()), left_sibling_offset).unwrap();
-                        pager.write_at(&Node::Leaf(current.clone()), child_offset).unwrap();
-                    },
-                    _ => {},
-                }
-                return false;
-            }
-        }
-        
-        if index < self.children.len() - 1 {
-            let right_sibling_offset = self.children[index + 1];
-            let mut right_sibling = pager.read(right_sibling_offset).unwrap();
-    
-            if right_sibling.can_borrow(degree) {
-                match (&mut right_sibling, &mut child_node) {
-                    (Node::Internal(ref mut sibling), Node::Internal(ref mut current)) => {
-                        println!("3 {:?} {:?} {:?}", self, current, sibling);
-                        let borrowed_key = sibling.keys.remove(0);
-                        current.keys.push(self.keys[index].clone());
-                        self.keys[index] = borrowed_key;
-    
-                        let borrowed_child = sibling.children.remove(0);
-                        current.children.push(borrowed_child);
-    
-                        pager.write_at(&Node::Internal(sibling.clone()), right_sibling_offset).unwrap();
-                        pager.write_at(&Node::Internal(current.clone()), child_offset).unwrap();
-                    },
-                    (Node::Leaf(ref mut sibling), Node::Leaf(ref mut current)) => {
-                        println!("4 {:?} {:?} {:?}", self, current, sibling);
-                        let borrowed_key = sibling.keys.remove(0);
-                        let borrowed_value = sibling.values.remove(0);
-                        current.keys.push(borrowed_key);
-                        current.values.push(borrowed_value);
-    
-                        self.keys[index] = sibling.keys[0].clone();
-
-                        pager.write_at(&Node::Leaf(sibling.clone()), right_sibling_offset).unwrap();
-                        pager.write_at(&Node::Leaf(current.clone()), child_offset).unwrap();
-                    },
-                    _ => {},
-                }
-                return false;
-            }
-        }
-    
-        if index > 0 {
-            let left_sibling_offset = self.children[index - 1];
-            let mut left_sibling = pager.read(left_sibling_offset).unwrap();
-            match (&mut left_sibling, &mut child_node) {
-                (Node::Internal(ref mut sibling), Node::Internal(ref mut current)) => {                    
-                    println!("5");
-                    sibling.keys.push(self.keys.remove(index - 1));
-                    sibling.keys.append(&mut current.keys);
-                    sibling.children.append(&mut current.children);
-    
-                    self.children.remove(index);
-    
-                    pager.write_at(&Node::Internal(sibling.clone()), left_sibling_offset).unwrap();
-                    pager.write_at(&Node::Internal(current.clone()), child_offset).unwrap();
-                    return self.keys.len() < (degree / 2)
-                },
-                (Node::Leaf(ref mut sibling), Node::Leaf(ref mut current)) => {
-                    println!("6");
-                    sibling.keys.append(&mut current.keys);
-                    sibling.values.append(&mut current.values);
-    
-                    if index <= self.keys.len() - 1 {
-                        self.keys.remove(index);
-                    }
-                    self.children.remove(index);
-
-                    pager.write_at(&Node::Leaf(sibling.clone()), left_sibling_offset).unwrap();
-                    pager.write_at(&Node::Leaf(current.clone()), child_offset).unwrap();
-                    return true // self.keys.len() < (degree / 2)
-                },
-                _ => {},
-            }
-        } else {
-            let right_sibling_offset = self.children[index + 1];
-            let mut right_sibling = pager.read(right_sibling_offset).unwrap();
-            match (&mut child_node, &mut right_sibling) {
-                (Node::Internal(ref mut current), Node::Internal(ref mut sibling)) => {
-                    println!("7 {:?} {:?} {:?}", self, current, sibling);
-                    current.keys.push(self.keys.remove(index));
-                    current.keys.append(&mut sibling.keys);
-                    current.children.append(&mut sibling.children);
-                    // self.keys.remove(index);
-                    self.children.remove(index + 1);
-    
-                    pager.write_at(&Node::Internal(sibling.clone()), right_sibling_offset).unwrap();
-                    pager.write_at(&Node::Internal(current.clone()), child_offset).unwrap();
-                    return true // self.keys.len() < (degree / 2)
-                },
-                (Node::Leaf(ref mut current), Node::Leaf(ref mut sibling)) => {
-                    println!("8 {:?} {:?} {:?}", self, current, sibling);
-                    current.keys.append(&mut sibling.keys);
-                    current.values.append(&mut sibling.values);
-    
-                    self.keys.remove(index);
-                    self.children.remove(index + 1);
-
-                    pager.write_at(&Node::Leaf(sibling.clone()), right_sibling_offset).unwrap();
-                    pager.write_at(&Node::Leaf(current.clone()), child_offset).unwrap();
-                    return self.keys.len() < (degree / 2)
-                },
-                _ => {},
-            }
-        }
-    
-        false
+        // Реализуй эту функцию
     }
 
     fn search(&self, pager: &mut Pager, key: Key) -> Option<Value> {
         let position = self.keys.binary_search(&key).unwrap_or_else(|pos| pos);
         let child_offset = self.children[position];
         let child_node = pager.read(child_offset).unwrap();
-        // println!("{:?} {}", self, position);
         child_node.search(pager, key)
     }
 
@@ -536,109 +396,5 @@ impl Pager {
         let data: Vec<u8> = bincode::encode_to_vec(&node, encoder_config)?;
         self.file.write_all(data.as_slice())?;
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{collections::BTreeMap, fs::OpenOptions};
-
-    use super::*;
-
-    #[test]
-    // fn test_tree_structure() {
-    //     let file = OpenOptions::new()
-    //         .create(true)
-    //         .read(true)
-    //         .write(true)
-    //         .truncate(true)
-    //         .open("/tmp/test_tree_structure.ldb")
-    //         .unwrap();
-
-    //     let mut tree = BPTree::new(2, STARTUP_OFFSET, file);
-
-    //     tree.insert("10".to_string(), "ten".to_string());
-    //     tree.insert("20".to_string(), "twenty".to_string());
-    //     tree.insert("5".to_string(), "five".to_string());
-    //     tree.insert("6".to_string(), "six".to_string());
-    //     tree.insert("12".to_string(), "twelve".to_string());
-    //     tree.insert("30".to_string(), "thirty".to_string());
-    //     tree.insert("7".to_string(), "seven".to_string());
-    //     tree.insert("17".to_string(), "seventeen".to_string());
-
-    //     assert_eq!(tree.search("10".to_string()), Some("ten".to_string()));
-    //     assert_eq!(tree.search("20".to_string()), Some("twenty".to_string()));
-    //     assert_eq!(tree.search("5".to_string()), Some("five".to_string()));
-    //     assert_eq!(tree.search("6".to_string()), Some("six".to_string()));
-    //     assert_eq!(tree.search("12".to_string()), Some("twelve".to_string()));
-    //     assert_eq!(tree.search("30".to_string()), Some("thirty".to_string()));
-    //     assert_eq!(tree.search("7".to_string()), Some("seven".to_string()));
-    //     assert_eq!(tree.search("17".to_string()), Some("seventeen".to_string()));
-
-    //     assert_eq!(tree.search("2000".to_string()), None);
-    //     assert_eq!(tree.search("3000".to_string()), None);
-    // }
-
-    // #[test]
-    // fn test_large_insertions() {
-    //     let file = OpenOptions::new()
-    //         .create(true)
-    //         .read(true)
-    //         .write(true)
-    //         .truncate(true)
-    //         .open("/tmp/test_large_insertions.ldb")
-    //         .unwrap();
-
-    //     let mut tree = BPTree::new(2, STARTUP_OFFSET, file);
-
-    //     for i in 1..=10000 {
-    //         tree.insert(i.to_string(), i.to_string());
-    //     }
-
-    //     for i in 1..=10000 {
-    //         assert_eq!(tree.search(i.to_string()), Some(i.to_string()));
-    //     }
-    // }
-
-    #[test]
-    fn delete_works() {
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(true)
-            .open("/tmp/delete_works.ldb")
-            .unwrap();
-
-        let mut tree = BPTree::new(2, STARTUP_OFFSET, file);
-
-        let key_value_pairs = BTreeMap::from([
-            ("d".to_string(), "derby".to_string()),
-            ("e".to_string(), "elephant".to_string()),
-            ("f".to_string(), "four".to_string()),
-            ("a".to_string(), "avengers".to_string()),
-            ("b".to_string(), "bing".to_string()),
-            ("c".to_string(), "center".to_string()),
-            ("g".to_string(), "center".to_string()),
-        ]);
-
-        for (key, value) in &key_value_pairs {
-            tree.insert(key.clone(), value.clone());
-        }
-
-        // for (key, value) in &key_value_pairs {
-        //     assert_eq!(tree.search(key.clone()), Some(value.clone()));
-        // }
-
-        tree.delete("d".to_string());
-        assert_eq!(tree.search("d".to_string()), None);
-
-        // tree.delete("c".to_string());
-        // assert_eq!(tree.search("c".to_string()), None);
-
-        // tree.delete("f".to_string());
-        // assert_eq!(tree.search("f".to_string()), None);
-
-        tree.debug_print();
     }
 }

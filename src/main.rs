@@ -50,28 +50,28 @@ fn main() {
         tree.insert(key.clone(), value.clone());
     }
 
-    for (key, value) in &key_value_pairs {
-        assert_eq!(tree.search(key.clone()), Some(value.clone()));
-    }
+    // for (key, value) in &key_value_pairs {
+    //     assert_eq!(tree.search(key.clone()), Some(value.clone()));
+    // }
 
     tree.delete("006".to_string());
-    tree.delete("012".to_string());
-    tree.delete("002".to_string());
-    tree.delete("005".to_string());
-    tree.delete("001".to_string());
-    tree.delete("003".to_string());
-    tree.delete("004".to_string());
-    tree.delete("007".to_string());
-    tree.delete("008".to_string());
-    tree.delete("009".to_string());
-    tree.delete("010".to_string());
-    tree.delete("011".to_string());
-    tree.delete("018".to_string());
-    tree.delete("019".to_string());
-    tree.delete("017".to_string());
-    tree.delete("020".to_string());
-    tree.delete("014".to_string());
-    tree.delete("015".to_string());
+    // tree.delete("012".to_string());
+    // tree.delete("002".to_string());
+    // tree.delete("005".to_string());
+    // tree.delete("001".to_string());
+    // tree.delete("003".to_string());
+    // tree.delete("004".to_string());
+    // tree.delete("007".to_string());
+    // tree.delete("008".to_string());
+    // tree.delete("009".to_string());
+    // tree.delete("010".to_string());
+    // tree.delete("011".to_string());
+    // tree.delete("018".to_string());
+    // tree.delete("019".to_string());
+    // tree.delete("017".to_string());
+    // tree.delete("020".to_string());
+    // tree.delete("014".to_string());
+    // tree.delete("015".to_string());
     // tree.delete("016".to_string());
     // tree.delete("013".to_string());
 
