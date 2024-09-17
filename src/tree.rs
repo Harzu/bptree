@@ -187,13 +187,13 @@ mod tests {
             .open("/tmp/test_large_insertions.ldb")
             .unwrap();
 
-        let mut tree = BPTree::new(4, STARTUP_OFFSET, file);
+        let mut tree = BPTree::new(300, STARTUP_OFFSET, file);
 
-        for i in 1..=10000 {
+        for i in 1..=100000 {
             tree.insert(i.to_string(), i.to_string().as_bytes().to_vec())?;
         }
 
-        for i in 1..=10000 {
+        for i in 1..=100000 {
             assert_eq!(tree.search(i.to_string())?, Some(i.to_string().as_bytes().to_vec()));
         }
 
